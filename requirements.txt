@@ -1,0 +1,11 @@
+pandas
+numpy
+scikit-learn
+sentence-transformers
+tqdm
+umap-learn
+matplotlib
+seaborn
+fastapi
+uvicorn
+pydantic
