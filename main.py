@@ -1,66 +1,44 @@
 """
 Script de execução local do classificador de tickets.
 
-Este arquivo permite testar o sistema via terminal, simulando
-o uso do classificador em produção sem precisar usar a API.
+Este arquivo permite testar o sistema via terminal usando
+o mesmo modelo treinado que é usado pela API.
 
 Fluxo:
-- Carrega os tickets de referência
-- Gera embeddings
-- Inicializa o classificador por similaridade
-- Permite ao usuário digitar novos tickets
-- Retorna a classe prevista e o nível de confiança
+- Carrega o modelo de embeddings congelado
+- Carrega o classificador supervisionado
+- Permite digitar tickets
+- Retorna classe, probabilidade e indicação de triagem humana
 """
 
-from src.pipeline import load_and_prepare_data, generate_embeddings
-from src.classifier import TicketClassifier
 from src.embeddings import EmbeddingGenerator
-from src.config import SIMILARITY_THRESHOLD
+from src.classifier import TicketClassifier
+from src.config import (
+    CLASSIFIER_MODEL_PATH,
+    CONFIDENCE_THRESHOLD,
+)
+
+# Classes devem estar na mesma ordem usada no treino
+CLASS_LABELS = [
+    "Infraestrutura de Rede",
+    "Suporte a Impressoras",
+    "Dispositivos Eletrônicos",
+    "Cloud & Serviços Digitais",
+    "Loja Online e Casos Especiais",
+]
 
 
 def main():
     print("\n=== VOLL | Sistema de Classificação de Tickets ===\n")
 
     # ------------------------------------------------------------------
-    # 1. Carregamento dos tickets de referência
+    # 1. Inicializa o encoder e o classificador treinado
     # ------------------------------------------------------------------
-    # Estes tickets funcionam como "protótipos" iniciais para cada classe.
-    df = load_and_prepare_data("data/raw/classificacao_atendimento.csv")
-
-    # ------------------------------------------------------------------
-    # 2. Geração dos embeddings dos tickets conhecidos
-    # ------------------------------------------------------------------
-    embeddings = generate_embeddings(df)
-
-    # ------------------------------------------------------------------
-    # 3. Classes iniciais (seed)
-    # ------------------------------------------------------------------
-    # Essas classes foram definidas a partir da análise exploratória
-    # e representam os times de atendimento da VOLL.
-    class_labels = [
-        "Financeiro",
-        "Suporte Técnico",
-        "Políticas e Compliance",
-        "Operações de Viagem",
-        "Administração",
-    ]
-
-    # Garante alinhamento entre número de tickets e número de labels
-    class_labels = class_labels[: len(df)]
-
-    # ------------------------------------------------------------------
-    # 4. Inicialização do classificador por similaridade
-    # ------------------------------------------------------------------
-    classifier = TicketClassifier(
-        reference_embeddings=embeddings,
-        reference_labels=class_labels,
-    )
-
-    # Encoder para gerar embedding dos tickets digitados pelo usuário
     encoder = EmbeddingGenerator()
+    classifier = TicketClassifier(CLASSIFIER_MODEL_PATH, CLASS_LABELS)
 
     # ------------------------------------------------------------------
-    # 5. Loop interativo para classificação de novos tickets
+    # 2. Loop interativo
     # ------------------------------------------------------------------
     while True:
         print("\nDigite um novo ticket (ou ENTER para sair):")
@@ -73,17 +51,22 @@ def main():
         # Gera embedding do texto digitado
         emb = encoder.encode([user_text])[0]
 
-        # Classifica o ticket por similaridade
-        label, score = classifier.predict(emb)
+        # Classifica o ticket usando o modelo supervisionado
+        label, confidence, probabilities = classifier.predict(emb)
 
         # Exibe resultado
         print("\nResultado:")
         print("Classe prevista:", label)
-        print("Confiança (similaridade):", round(score, 3))
+        print("Confiança:", round(confidence, 3))
 
-        # Se a confiança for baixa, orienta triagem humana
-        if score < SIMILARITY_THRESHOLD:
-            print("Baixa confiança: encaminhar para triagem humana.")
+        # Mostra probabilidades por classe (útil para debug e análise)
+        print("\nDistribuição de probabilidades:")
+        for cls, prob in probabilities.items():
+            print(f" - {cls}: {round(prob, 3)}")
+
+        # Indicação de triagem humana
+        if confidence < CONFIDENCE_THRESHOLD:
+            print("\nBaixa confiança: encaminhar para triagem humana.")
 
 
 if __name__ == "__main__":

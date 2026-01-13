@@ -1,15 +1,30 @@
 """
 Arquivo de configuração central do projeto.
 
-Aqui ficam parâmetros globais que controlam o comportamento do pipeline,
-como o modelo de embeddings e thresholds de decisão.
+Aqui ficam parâmetros globais que controlam:
+- Modelo de embeddings
+- Caminhos dos artefatos treinados
+- Threshold de confiança para triagem humana
 
-Manter esses valores centralizados facilita ajuste, versionamento e experimentação.
+Esses valores permitem controlar o comportamento do sistema
+sem alterar código.
 """
 
-# Modelo Transformer usado para gerar embeddings semânticos dos tickets
+# ---------------------------------------------------------
+# Modelo de embeddings
+# ---------------------------------------------------------
+# Usado tanto no treino quanto na inferência
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
-# Threshold mínimo de similaridade para aceitar uma classificação automática.
-# Se a similaridade for menor que esse valor, o ticket pode ser enviado para triagem humana.
-SIMILARITY_THRESHOLD = 0.6
+# ---------------------------------------------------------
+# Caminhos dos modelos treinados
+# ---------------------------------------------------------
+EMBEDDING_MODEL_PATH = "models/embedding_model.joblib"
+CLASSIFIER_MODEL_PATH = "models/ticket_classifier.joblib"
+
+# ---------------------------------------------------------
+# Threshold de confiança
+# ---------------------------------------------------------
+# Se a probabilidade máxima do classificador for menor que isso,
+# o ticket deve ser enviado para triagem humana.
+CONFIDENCE_THRESHOLD = 0.60

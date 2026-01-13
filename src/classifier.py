@@ -1,43 +1,59 @@
 """
 Módulo responsável pela classificação de novos tickets.
 
-Este classificador funciona por similaridade:
-um novo ticket é comparado aos tickets de referência
-e recebe a classe do mais parecido.
+Este classificador usa um modelo supervisionado treinado
+(Logistic Regression) sobre embeddings de texto para prever
+a classe de cada ticket.
+
+Ele retorna:
+- Classe prevista
+- Vetor de probabilidades por classe
+- Score de confiança (maior probabilidade)
 """
 
-from sklearn.metrics.pairwise import cosine_similarity
+import joblib
 import numpy as np
+from typing import List
 
 
 class TicketClassifier:
     """
-    Classificador baseado em protótipos.
+    Wrapper para o classificador supervisionado treinado.
 
-    Ele armazena embeddings de tickets de referência e suas classes,
-    e usa similaridade de cosseno para classificar novos tickets.
+    Este objeto carrega o modelo salvo em disco (.joblib)
+    e fornece uma interface simples para predição.
     """
 
-    def __init__(self, reference_embeddings, reference_labels):
+    def __init__(self, model_path: str, class_labels: List[str]):
         """
         Parâmetros:
-            reference_embeddings (np.ndarray): embeddings dos tickets conhecidos
-            reference_labels (List[str]): classes desses tickets
+            model_path (str): caminho para o arquivo .joblib do modelo treinado
+            class_labels (List[str]): lista de nomes das classes, na mesma ordem
+                                     usada no treinamento
         """
-        self.reference_embeddings = reference_embeddings
-        self.reference_labels = reference_labels
+        self.model = joblib.load(model_path)
+        self.class_labels = class_labels
 
-    def predict(self, embedding):
+    def predict(self, embedding: np.ndarray):
         """
-        Classifica um novo ticket a partir de seu embedding.
+        Classifica um novo ticket a partir do embedding.
+
+        Parâmetros:
+            embedding (np.ndarray): vetor do ticket (1D)
 
         Retorna:
-        - classe prevista
-        - score de similaridade
-
-        Se o score for baixo, o ticket pode ser enviado para triagem humana.
+            predicted_class (str)
+            confidence (float)
+            probabilities (dict)
         """
-        sims = cosine_similarity([embedding], self.reference_embeddings)[0]
-        idx = np.argmax(sims)
+        probs = self.model.predict_proba([embedding])[0]
+        idx = int(np.argmax(probs))
 
-        return self.reference_labels[idx], float(sims[idx])
+        predicted_class = self.class_labels[idx]
+        confidence = float(probs[idx])
+
+        prob_dict = {
+            self.class_labels[i]: float(probs[i]) for i in range(len(self.class_labels))
+        }
+
+        return predicted_class, confidence, prob_dict

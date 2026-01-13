@@ -1,50 +1,48 @@
 """
 Pipeline principal do sistema de classificação de tickets.
 
-Este módulo conecta:
-- carregamento de dados
-- limpeza de texto
-- geração de embeddings
+Responsável por:
+- Carregar dados
+- Construir o campo de texto unificado
+- Aplicar limpeza
+- Preparar o input do modelo de embeddings
+
+Este pipeline é usado tanto no treino quanto na inferência (API),
+garantindo consistência entre os ambientes.
 """
 
 import pandas as pd
 from .utils import clean_text
-from .embeddings import EmbeddingGenerator
 
 
-def load_and_prepare_data(path):
+def build_text(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Carrega o CSV de tickets e prepara a coluna de texto unificada.
+    Cria a coluna 'text' combinando subject e body e aplica limpeza.
 
     Parâmetros:
-        path (str): caminho para o arquivo CSV
+        df (pd.DataFrame): DataFrame com colunas subject e body
 
     Retorno:
-        DataFrame com coluna 'text' pronta para embedding
+        DataFrame com coluna 'text'
     """
-    df = pd.read_csv(path)
+    df = df.copy()
 
-    # Combina subject e body em um único campo
     df["text"] = (
         df["subject"].fillna("").astype(str) + " " + df["body"].fillna("").astype(str)
     )
 
-    # Aplica limpeza básica
     df["text"] = df["text"].apply(clean_text)
 
     return df
 
 
-def generate_embeddings(df):
+def load_data(path: str) -> pd.DataFrame:
     """
-    Gera embeddings para a coluna 'text' do DataFrame.
-
-    Parâmetros:
-        df (pd.DataFrame): dataframe com coluna 'text'
+    Carrega o CSV e aplica o pipeline de texto.
 
     Retorno:
-        np.ndarray com embeddings dos tickets
+        DataFrame pronto para embedding
     """
-    encoder = EmbeddingGenerator()
-    embeddings = encoder.encode(df["text"].tolist())
-    return embeddings
+    df = pd.read_csv(path)
+    df = build_text(df)
+    return df

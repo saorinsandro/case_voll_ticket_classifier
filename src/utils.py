@@ -1,8 +1,8 @@
 """
 Funções utilitárias para limpeza e pré-processamento de texto.
 
-Este módulo é responsável por normalizar o texto dos tickets antes de
-enviá-los para o modelo de embeddings.
+Este módulo define o contrato de normalização textual do sistema.
+Qualquer alteração aqui exige re-treino do modelo.
 """
 
 import re
@@ -10,14 +10,18 @@ import re
 
 def clean_text(text: str) -> str:
     """
-    Realiza limpeza básica de texto.
+    Normaliza o texto do ticket.
 
     Passos:
     - Converte para minúsculas
-    - Remove caracteres especiais
+    - Remove caracteres especiais (mantendo acentos)
     - Normaliza espaços
 
-    Isso ajuda a reduzir ruído sem perder o significado semântico.
+    Parâmetros:
+        text (str): texto bruto
+
+    Retorno:
+        str: texto limpo
     """
     if not isinstance(text, str):
         return ""
@@ -25,4 +29,5 @@ def clean_text(text: str) -> str:
     text = text.lower()
     text = re.sub(r"\s+", " ", text)
     text = re.sub(r"[^a-zA-Z0-9À-ÿ ]", "", text)
+
     return text.strip()

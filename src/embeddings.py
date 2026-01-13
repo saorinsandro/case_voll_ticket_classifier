@@ -1,34 +1,32 @@
 """
 Módulo responsável por gerar embeddings semânticos dos tickets.
 
-Embeddings transformam texto em vetores numéricos que capturam significado,
-permitindo medir similaridade, agrupar tickets e construir classificadores.
+Este módulo carrega o modelo de embeddings congelado
+usado durante o treinamento do classificador, garantindo
+consistência entre treino e inferência.
 """
 
+import joblib
 from sentence_transformers import SentenceTransformer
-from .config import EMBEDDING_MODEL_NAME
+from .config import EMBEDDING_MODEL_NAME, EMBEDDING_MODEL_PATH
 
 
 class EmbeddingGenerator:
-    """
-    Wrapper em torno do SentenceTransformer para geração de embeddings.
-
-    Centralizar esse código permite trocar o modelo ou ajustar parâmetros
-    sem impactar o restante do pipeline.
-    """
-
     def __init__(self):
-        # Carrega o modelo Transformer definido em config.py
-        self.model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+        """
+        Tenta carregar o modelo salvo em disco (joblib).
+        Se não existir (ex: ambiente de treino), carrega do HuggingFace.
+        """
+        try:
+            self.model = joblib.load(EMBEDDING_MODEL_PATH)
+        except Exception:
+            self.model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
     def encode(self, texts):
         """
-        Recebe uma lista de textos (tickets) e retorna seus embeddings.
+        Gera embeddings para uma lista de textos.
 
-        Parâmetros:
-            texts (List[str]): lista de textos a serem transformados
-
-        Retorno:
-            np.ndarray: matriz (n_textos, dimensão_embedding)
+        Retorna:
+            np.ndarray com shape (n_textos, dimensão_embedding)
         """
-        return self.model.encode(texts, show_progress_bar=True)
+        return self.model.encode(texts, show_progress_bar=False)

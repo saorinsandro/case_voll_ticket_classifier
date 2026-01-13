@@ -2,112 +2,134 @@
 
 ## 1. Contexto
 
-O conjunto de dados fornecido contém apenas cinco tickets sem rótulos. Esse cenário representa um problema realista de *cold start*, no qual o sistema de atendimento precisa operar sem histórico de dados rotulados.
+O conjunto de dados fornecido contém milhares de tickets de atendimento não rotulados. Esse cenário representa uma situação comum em empresas reais: existe grande volume de dados, mas sem rótulos estruturados para treinamento supervisionado.
 
-Mesmo com poucos dados, a necessidade de negócio permanece: os tickets recebidos devem ser direcionados corretamente para os times de atendimento, reduzindo tempo de resposta e retrabalho.
+O desafio é transformar esse histórico de textos em um sistema capaz de classificar automaticamente novos tickets em categorias operacionais, permitindo seu roteamento para os times corretos.
 
-A solução proposta foi desenhada para funcionar desde o primeiro dia e evoluir conforme mais dados e feedback humano se tornam disponíveis.
-
----
-
-## 2. Classes Operacionais
-
-A partir da análise do conteúdo dos tickets e do contexto de negócio da VOLL, foram definidas as seguintes classes operacionais iniciais:
-
-| Classe | Descrição |
-|-------|----------|
-| Financeiro | Reembolsos, cobranças e pagamentos |
-| Suporte Técnico | Login, erros no aplicativo, falhas de sistema |
-| Políticas e Compliance | Regras corporativas de viagem |
-| Operações de Viagem | Voos, hotéis e reservas |
-| Administração | Cadastro, usuários e permissões |
-
-Essas classes refletem diretamente a forma como plataformas de mobilidade corporativa estruturam seus times de atendimento.
+A solução foi desenhada para resolver três problemas principais:
+- Descobrir automaticamente os tipos de tickets existentes
+- Criar um conjunto de dados rotulado
+- Construir um classificador escalável para produção
 
 ---
 
-## 3. Pipeline da Solução
+## 2. Descoberta das Classes
 
-O pipeline completo é composto pelas seguintes etapas:
+Como não existiam rótulos, foi aplicada uma abordagem de clustering semântico:
 
-1. Combinação e limpeza do texto (assunto + corpo do e-mail)
-2. Geração de embeddings semânticos com modelo Transformer (Sentence-BERT)
-3. Descoberta de padrões por meio de clusterização
-4. Definição de protótipos por classe
-5. Classificação de novos tickets por similaridade
+1. Os textos dos tickets foram transformados em embeddings usando Sentence-BERT
+2. Os embeddings foram reduzidos com UMAP
+3. Os grupos semânticos foram descobertos usando HDBSCAN
 
-Cada ticket é representado por um vetor semântico. Novos tickets são comparados aos tickets de referência e recebem a classe do mais similar.
+Isso permitiu identificar padrões naturais nos dados sem qualquer supervisão.
 
-Além da classe, o sistema retorna um score de confiança baseado na similaridade.
+A análise dos clusters revelou cinco grandes temas operacionais:
 
----
+| Cluster | Classe Operacional |
+|--------|-------------------|
+| 0 | Infraestrutura de Rede |
+| 1 | Suporte a Impressoras |
+| 2 | Dispositivos Eletrônicos |
+| 3 | Cloud & Serviços Digitais |
+| -1 | Loja Online e Casos Especiais |
 
-## 4. Tratamento de Incerteza e Novos Tipos de Tickets
-
-Quando a similaridade entre um novo ticket e os tickets de referência é baixa, o sistema não força uma classificação automática. Em vez disso, o ticket é marcado para triagem humana.
-
-Esse mecanismo permite:
-
-- Evitar erros automáticos em casos ambíguos
-- Detectar novos tipos de solicitações
-- Criar novas classes quando necessário
-
-Na prática, isso significa que o sistema se adapta à evolução do negócio.
+Essas classes refletem diretamente áreas de suporte típicas em serviços e operações de tecnologia.
 
 ---
 
-## 5. Avaliação
+## 3. Criação do Dataset Rotulado
 
-Como não existem rótulos verdadeiros, métricas tradicionais como acurácia não são aplicáveis.
+Após a identificação dos clusters, cada ticket foi associado à sua classe correspondente, criando um dataset pseudo-rotulado com milhares de exemplos.
 
-A solução é avaliada por meio de:
+Esse dataset foi salvo em:
+- data/processed/tickets_labeled.csv
 
-- Coerência semântica dos clusters
-- Validação humana de amostras
-- Taxa de reatribuição manual
-- SLA por classe de atendimento
-
-Essas métricas refletem o impacto real da solução no processo de atendimento.
+Ele passa a ser a base oficial para treinamento de modelos supervisionados e evolução contínua.
 
 ---
 
-## 6. Monitoramento em Produção
+## 4. Treinamento do Classificador
 
-Em produção, os seguintes indicadores devem ser monitorados:
+Com o dataset rotulado, foi treinado um classificador supervisionado com a seguinte arquitetura:
 
-- Drift dos embeddings ao longo do tempo
-- Distribuição de tickets por classe
+- Representação textual: Sentence-BERT (all-MiniLM-L6-v2)
+- Classificador: Logistic Regression
+
+Foram comparados três algoritmos:
+- Logistic Regression
+- Random Forest
+- Gradient Boosting
+
+A avaliação foi feita usando:
+- Cross-validation com F1-score ponderado
+- ROC AUC multiclasse (One-vs-Rest)
+
+O Logistic Regression apresentou o melhor equilíbrio entre performance e estabilidade, sendo escolhido como modelo final.
+
+Os artefatos finais foram salvos em:
+- models/ticket_classifier.joblib
+- models/embedding_model.joblib
+
+---
+
+## 5. Classificação em Produção
+
+Para cada novo ticket, o sistema executa:
+
+1. Limpeza e normalização do texto (contrato de pré-processamento)
+2. Geração de embedding semântico
+3. Aplicação do classificador supervisionado treinado
+4. Retorno da classe prevista e probabilidades por classe
+
+Além da classe, o sistema retorna um score de confiança (probabilidade máxima).
+
+Se a confiança ficar abaixo de um threshold configurável, o ticket é marcado para triagem humana, evitando decisões automáticas incorretas.
+
+---
+
+## 6. Governança e Monitoramento
+
+Em produção, recomenda-se monitorar:
+
+- Distribuição de tickets por classe ao longo do tempo
 - Taxa de baixa confiança (tickets enviados para triagem humana)
-- Tempo médio de resolução por classe
+- Drift nos embeddings / mudanças no vocabulário
+- Mudança no perfil de temas (surgimento de novos tipos de ticket)
 
-Esses indicadores permitem acompanhar tanto a qualidade do modelo quanto seu impacto no negócio.
+Esses indicadores ajudam a detectar degradação de performance e necessidade de atualização do modelo.
 
 ---
 
 ## 7. Estratégia de Retreino
 
-À medida que tickets são revisados e corrigidos manualmente, esses dados passam a formar um conjunto rotulado.
+Tickets enviados para triagem humana podem ser rotulados por analistas e incorporados ao dataset, permitindo:
 
-O sistema pode então evoluir de um roteador por similaridade para um classificador supervisionado, utilizando esses rótulos reais.
+- Retreino periódico (ex: semanal/mensal)
+- Refinamento das classes existentes
+- Criação de novas categorias quando necessário
 
-O retreino pode ser acionado de forma periódica ou quando houver drift significativo nos dados.
+Isso transforma o sistema em um pipeline de aprendizado contínuo.
 
 ---
 
-## 8. Como aplicar uma estratégia de  *Active Learning*?
+## 8. Active Learning
 
-Com apenas 1% dos tickets rotulados, é possível aplicar uma estratégia de *active learning*:
+O sistema implementa implicitamente uma estratégia de active learning:
 
-- O modelo identifica os tickets com maior incerteza
-- Esses tickets são priorizados para rotulagem humana
-- O modelo é re-treinado com esse conjunto altamente informativo
-
-Isso acelera significativamente a melhoria do modelo, reduzindo o custo de rotulagem.
+- Tickets com baixa confiança são priorizados para revisão humana
+- Esses exemplos são os mais informativos para o modelo
+- O retreino com esses dados maximiza o ganho de performance com o menor custo de rotulagem
 
 ---
 
 ## 9. Conclusão
 
-Mesmo com dados extremamente limitados, a solução entregue permite classificar e rotear tickets de forma robusta, transparente e evolutiva.
+A solução implementa um pipeline completo e realista de Machine Learning para classificação de tickets:
 
-O sistema foi projetado para operar em ambiente real, com controle de incerteza, monitoramento contínuo e uma estratégia clara de crescimento para aprendizado supervisionado.
+- Descoberta automática de classes via clustering semântico
+- Construção de dataset pseudo-rotulado
+- Treinamento supervisionado com avaliação comparativa de modelos
+- Governança por confiança e triagem humana
+- Exposição via API REST para uso operacional
+
+O design é alinhado a práticas modernas de empresas SaaS e permite evolução contínua conforme novos dados e feedback humano se acumulam.

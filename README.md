@@ -1,83 +1,109 @@
-# VOLL – Sistema de Classificação de Tickets de Atendimento
+# VOLL – Sistema de Classificação Inteligente de Tickets de Atendimento
 
-## Autor: Sandro Saorin da Silva
+## Autor
+Sandro Saorin da Silva
 
-Este repositório apresenta uma solução completa para classificação e roteamento automático de tickets de atendimento da VOLL, desenvolvida como parte de um case técnico para a vaga de Cientista de Dados Sênior.
+Este repositório apresenta uma solução completa de classificação e roteamento automático de tickets de atendimento para a VOLL, desenvolvida como parte de um case técnico para a vaga de Cientista de Dados Sênior.
 
-O desafio simula um cenário de classificação de tickets de atendimento, onde a solução proposta utiliza Processamento de Linguagem Natural (NLP) e embeddings semânticos para permitir que os tickets sejam classificados desde o primeiro dia, com uma estratégia clara de evolução para modelos supervisionados.
-
----
-
-## Objetivo do Projeto
-
-Classificar automaticamente tickets de atendimento, a partir do assunto e do corpo dos e-mails, em categorias operacionais que permitam direcionar cada solicitação ao time mais adequado, como:
-
-- Financeiro (reembolsos, cobranças)
-- Suporte técnico (login, erros, app)
-- Operações de viagem (voos, hotéis, reservas)
-- Políticas corporativas
-- Administração e cadastro de usuários
+A solução cobre todo o ciclo de um sistema de Machine Learning em produção:
+- Descoberta de classes a partir de dados não rotulados
+- Criação de um dataset pseudo-rotulado
+- Treinamento de um classificador supervisionado
+- Disponibilização via API REST
 
 ---
 
-## Abordagem
+## Objetivo
 
-Dado o volume extremamente reduzido de dados e a ausência de rótulos, foi adotada uma abordagem baseada em representações semânticas em vez de aprendizado supervisionado tradicional.
+Classificar automaticamente tickets de atendimento, a partir do assunto e do corpo do e-mail, em categorias operacionais que permitam o roteamento para o time correto, como:
 
-A solução funciona em quatro etapas principais:
-
-1. Pré-processamento do texto (assunto + corpo do e-mail)
-2. Geração de embeddings semânticos usando um modelo Transformer (Sentence-BERT)
-3. Descoberta e definição de classes a partir de agrupamentos semânticos
-4. Classificação de novos tickets por similaridade
-
-Novos tickets são comparados semanticamente aos tickets de referência. A classe do ticket mais similar é atribuída, juntamente com um score de confiança.
-
-Quando a similaridade é baixa, o sistema indica que o ticket deve ser enviado para triagem humana, evitando decisões automáticas incorretas.
+- Infraestrutura de Rede
+- Suporte a Impressoras
+- Dispositivos Eletrônicos
+- Cloud & Serviços Digitais
+- Loja Online e Casos Especiais
 
 ---
 
-## Arquitetura do Projeto
+## Visão Geral da Solução
 
-voll-ticket-classifier/
-data/            Dados brutos e processados  
-notebooks/       Análise exploratória e validação semântica  
-src/             Pipeline de classificação  
-models/          Artefatos do modelo  
-reports/         Documentação e explicação da solução  
+O projeto simula um cenário real de empresa onde inicialmente não existem rótulos para os tickets. A solução evolui em três fases:
 
-Além do notebook, a solução inclui uma API REST (FastAPI) que expõe o classificador para uma simulação de uso em produção.
+1. Descoberta semântica (_Unsupervised Learning_)
+Os textos dos tickets são transformados em embeddings usando Sentence-BERT. Os embeddings são reduzidos com UMAP e os grupos semânticos são descobertos usando HDBSCAN. Isso permite identificar automaticamente temas operacionais reais dentro dos tickets.
+
+2. Criação de rótulos e dataset supervisionado
+Os clusters descobertos são interpretados e mapeados para classes operacionais reais, criando um dataset pseudo-rotulado salvo em:
+data/processed/tickets_labeled.csv
+
+3. Treinamento de um classificador supervisionado
+Com os rótulos definidos, treinamos um modelo de classificação real usando:
+- Embeddings Sentence-BERT (all-MiniLM-L6-v2)
+- Classificador Logistic Regression
+- Validação via cross-validation, F1-score e ROC AUC
+- Comparação com Random Forest e Gradient Boosting
+
+O melhor modelo é treinado em todo o dataset e salvo em:
+models/ticket_classifier.joblib  
+models/embedding_model.joblib  
 
 ---
 
-## Avaliação e Monitoramento
+## Arquitetura do Sistema
 
-Como não existem rótulos verdadeiros, a qualidade do sistema é avaliada por meio de:
+Texto do ticket  
+→ Limpeza e normalização (utils.py)  
+→ Geração de embeddings (embeddings.py)  
+→ Classificador supervisionado (classifier.py)  
+→ Classe + probabilidade + decisão de triagem  
 
-- Coerência semântica dos clusters
-- Validação humana de amostras
-- Taxa de reatribuição manual
-- SLA por classe de atendimento
+---
 
-Em produção, também devem ser monitorados:
+## API REST (FastAPI)
 
+A API expõe o modelo treinado.
+
+Endpoint:
+POST /classify
+
+Exemplo de requisição:
+
+{
+  "text": "Minha fatura do Google Workspace veio com valor errado"
+}
+
+Exemplo de resposta:
+
+{
+  "predicted_class": "Cloud & Serviços Digitais",
+  "confidence": 0.94,
+  "needs_human_review": false,
+  "probabilities": {
+    "Infraestrutura de Rede": 0.01,
+    "Suporte a Impressoras": 0.00,
+    "Dispositivos Eletrônicos": 0.02,
+    "Cloud & Serviços Digitais": 0.94,
+    "Loja Online e Casos Especiais": 0.03
+  }
+}
+
+Tickets com baixa confiança são automaticamente encaminhados para triagem humana.
+
+---
+
+## Monitoramento em Produção
+
+O sistema foi projetado para operação real com monitoramento de:
+- Distribuição de classes
+- Taxa de baixa confiança
 - Drift nos embeddings
-- Distribuição de tickets por categoria
-- Taxa de baixa confiança (triagem humana)
-
----
-
-## Evolução do Sistema
-
-À medida que tickets são corrigidos manualmente, esses dados passam a formar um conjunto rotulado.
-
-Com isso, o sistema pode evoluir de um roteador baseado em similaridade para um modelo supervisionado, utilizando estratégias de *active learning* para priorizar os tickets mais informativos.
+- Mudanças no perfil dos tickets
 
 ---
 
 ## Como Executar
 
-1. Criar e ativar o ambiente virtual:
+1. Criar ambiente virtual:
 ```bash
 python -m venv .venv  
 .venv\Scripts\activate  
@@ -88,18 +114,21 @@ python -m venv .venv
 pip install -r requirements.txt  
 ```
 
-3. Rodar o notebook de exploração:
+3. Rodar notebooks:
 ```bash
-notebooks/01_exploration.ipynb  
+notebooks/
 ```
 
-4. Iniciar a API:
+4. Subir a API:
 ```bash
 uvicorn api:app --reload  
 ```
 
-A API ficará disponível em:  
-http://127.0.0.1:8000  
-
-Documentação interativa:  
+Acessar:
 http://127.0.0.1:8000/docs
+
+---
+
+## Conclusão
+
+Este projeto demonstra uma abordagem realista, escalável e industrial para classificação de tickets, cobrindo NLP moderno, clustering semântico, classificação supervisionada, governança por confiança e deploy via API.
