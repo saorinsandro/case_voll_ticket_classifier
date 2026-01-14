@@ -3,6 +3,4 @@ __pycache__/
 .env
 *.pkl
 *.pyc
-models/
-data/processed/
 .ipynb_checkpoints/
